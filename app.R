@@ -1,6 +1,6 @@
 #                          DynamicPlotWindowsApp
 #
-# Purpose   : Dysnamic creation of rows and colomns with plots
+# Purpose   : Dysnamic creation of rows and colomns with plots and legends
 #
 # Copyright : Vis Consultancy, the Netherlands
 #             This program is made available in the hope that it will be useful,
@@ -9,6 +9,7 @@
 #             See the GNU General Public License for more details
 # History   :
 #  Jul18 - Created
+#  Aug18 - Legend support added
 # ------------------------------------------------------------------------------
 require (shiny)
 require (ggplot2)
@@ -18,14 +19,14 @@ ui <- fluidPage (sidebarLayout (
         uiOutput ('uiPlotMgmnt')
     ),
     mainPanel (
-        uiOutput ('uiPlots'),
+        uiOutput ('uiPlotsAndLegends'),
         fluidRow (
             column (2, fluidRow (
                 column (2, p ('rows')),
                 column (2, actionButton ('uiRowsMin' , label='-')),
                 column (2, actionButton ('uiRowsPlus', label='+'))
             )),
-column (2, fluidRow (
+            column (2, fluidRow (
                 column (4, p ('columns'), offset=1 ),
                 column (2, actionButton ('uiColsMin' , label='-')),
                 column (2, actionButton ('uiColsPlus', label='+'))
@@ -70,7 +71,7 @@ intitPlotEnvir <- function () {
 }
 
 # ------------------------------------------------------------------------------
-#                   init plot windows incl.  plot mgmnt panels
+#              init plot and legend windows incl. plot mgmnt panels
 # ------------------------------------------------------------------------------
 initPlots <- function (pe) {
     nRows <- plotNrc (pe, pe$nPW)$rowN
@@ -83,7 +84,7 @@ initPlots <- function (pe) {
 }
 
 setUiPlots <- function (input, output, pe) {
-    setUiPlotWindows (output, pe)                           # set user interface defintions for plot windows
+    setUiPLwindows (output, pe)                             # set user interface defintions for plot and legend windows
     setUiPMpanels  (output, pe)                             # set user interface PM panels; create outputId's for indiviual panels
     if (pe$nPW > pe$nPWui) for (plotN in (pe$nPWui+1):pe$nPW) {
         setUiPMpanel  (output, pe, plotN)                   # set user interface for  a (collapsed) PW window
@@ -91,6 +92,7 @@ setUiPlots <- function (input, output, pe) {
     }
     pe$nPWui <- pe$nPW
     showAllPlots  (output, pe)
+    showAllLegends (output, pe)
 }
 
 # ------------------------------------------------------------------------------
@@ -103,7 +105,7 @@ processRowsPlus <- function (input, output, pe) {
     pe$nPW              <- pe$nProws * pe$nPcols
     initPlotRow       (pe, pe$nProws)
     for (plotN in (nPWold+1):pe$nPW ) {
-        initPlotWindow (pe, plotN)                          # init new plot windows
+        initPlotWindow (pe, plotN)                          # init new plot and legend windows
         initPMpanel    (pe, plotN)                          # init new PM panels
         initPMapp      (pe, plotN)
     }
@@ -159,7 +161,7 @@ processColsMin <- function (input, output, pe) {
 }
 
 # ------------------------------------------------------------------------------
-#                                init plot windows
+#                          init plot ans legend windows
 # ------------------------------------------------------------------------------
 
 initPlotRow <- function (pe, rowN) {
@@ -173,6 +175,8 @@ initPlotWindow <- function (pe, plotN) {
     pe$pw[[plotN]]              <- list()
     pe$pw[[plotN]]$uiPW         <- paste0 ('uiPW', plotN)   # ui PW id
     pe$pw[[plotN]]$p            <- p_empty (plotN)
+    # legend window
+    pe$pw[[plotN]]$uiLW         <- paste0 ('uiLW', plotN)                       # ui LW id
 }
 
 p_empty <- function (plotN) {
@@ -184,34 +188,34 @@ p_empty <- function (plotN) {
 }
 
 # ------------------------------------------------------------------------------
-#                               set UI plot windows 
+#                       set UI for plot and legend windows 
 # ------------------------------------------------------------------------------
 
-setUiPlotWindows <- function (output, pe) {
-    cat ("setUiPlotWindows:", "pe$nProws=", pe$nProws, '\n')
+setUiPLwindows <- function (output, pe) {
     nRows   <- pe$nProws
-    rowList <- vector (mode='list', length = nRows)
-    output$uiPlots <- renderUI ({
-        cat ("setUiPlotWindows renderUI:", "pe$nProws=", pe$nProws, '\n')
+    rowList <- vector (mode='list', length = 2*nRows)
+    output$uiPlotsAndLegends <- renderUI ({
+        # cat ("setUiPLwindows renderUI:", "pe$nProws=", pe$nProws, '\n')
         for (rowN in 1:nRows) {
             height          <- paste0 (pe$pr[[rowN]]$pwHeight, 'px')
             nCols           <- pe$nPcols
             colW            <- 12 / nCols
             plotN1          <- rcPlotN (pe, rowN, 1)
+            # plots
             if (nCols == 1) {
                 pw              <- pe$pw[[plotN1]]
-                rowList[[rowN]] <- plotOutput (pw$uiPW, height=height)
+                rowList[[2*rowN-1]] <- plotOutput (pw$uiPW, height=height)
             } else if (nCols == 2) {
                 plotNs          <- c(plotN1, plotN1+1)
                 uiPWs           <- sapply (pe$pw[plotNs], function(X) X$uiPW)
-                rowList[[rowN]] <- fluidRow (
+                rowList[[2*rowN-1]] <- fluidRow (
                     column (colW, plotOutput (uiPWs[1], height=height)),
                     column (colW, plotOutput (uiPWs[2], height=height))
                 )
             } else if (nCols == 3) {
                 plotNs          <- c(plotN1, plotN1+1, plotN1+2)
                 uiPWs           <- sapply (pe$pw[plotNs], function(X) X$uiPW)
-                rowList[[rowN]] <- fluidRow (
+                rowList[[2*rowN-1]] <- fluidRow (
                     column (colW, plotOutput (uiPWs[1], height=height)),
                     column (colW, plotOutput (uiPWs[2], height=height)),
                     column (colW, plotOutput (uiPWs[3], height=height))
@@ -219,7 +223,7 @@ setUiPlotWindows <- function (output, pe) {
             } else if (nCols == 4) {
                 plotNs          <- c(plotN1, plotN1+1, plotN1+2, plotN1+3)
                 uiPWs           <- sapply (pe$pw[plotNs], function(X) X$uiPW)
-                rowList[[rowN]] <- fluidRow (
+                rowList[[2*rowN-1]] <- fluidRow (
                     column (colW, plotOutput (uiPWs[1], height=height)),
                     column (colW, plotOutput (uiPWs[2], height=height)),
                     column (colW, plotOutput (uiPWs[3], height=height)),
@@ -228,7 +232,7 @@ setUiPlotWindows <- function (output, pe) {
             } else if (nCols == 6) {
                 plotNs          <- c(plotN1, plotN1+1, plotN1+2, plotN1+3, plotN1+4, plotN1+5)
                 uiPWs           <- sapply (pe$pw[plotNs], function(X) X$uiPW)
-                rowList[[rowN]] <- fluidRow (
+                rowList[[2*rowN-1]] <- fluidRow (
                     column (colW, plotOutput (uiPWs[1], height=height)),
                     column (colW, plotOutput (uiPWs[2], height=height)),
                     column (colW, plotOutput (uiPWs[3], height=height)),
@@ -236,25 +240,47 @@ setUiPlotWindows <- function (output, pe) {
                     column (colW, plotOutput (uiPWs[5], height=height)),
                     column (colW, plotOutput (uiPWs[6], height=height))
                 )
-            }                    
+            } 
+            # legends, plotNs is known
+            if (nCols == 1) {
+                pw              <- pe$pw[[plotN1]]
+                rowList[[2*rowN]] <- htmlOutput (pw$uiLW)     
+                
+                
+            } else if (nCols == 2) {
+                uiLWs           <- sapply (pe$pw[plotNs], function(X) X$uiLW)
+                rowList[[2*rowN]] <- fluidRow (
+                    column (colW, htmlOutput (uiLWs[1])),
+                    column (colW, htmlOutput (uiLWs[2]))
+                )
+            } else if (nCols == 3) {
+                uiLWs           <- sapply (pe$pw[plotNs], function(X) X$uiLW)
+                rowList[[2*rowN]] <- fluidRow (
+                    column (colW, htmlOutput (uiLWs[1])),
+                    column (colW, htmlOutput (uiLWs[2])),
+                    column (colW, htmlOutput (uiLWs[3]))
+                )
+            } else if (nCols == 4) {
+                uiLWs           <- sapply (pe$pw[plotNs], function(X) X$uiLW)
+                rowList[[2*rowN]] <- fluidRow (
+                    column (colW, htmlOutput (uiLWs[1])),
+                    column (colW, htmlOutput (uiLWs[2])),
+                    column (colW, htmlOutput (uiLWs[3])),
+                    column (colW, htmlOutput (uiLWs[4]))
+                )
+            } else if (nCols == 6) {
+                uiLWs           <- sapply (pe$pw[plotNs], function(X) X$uiLW)
+                rowList[[2*rowN]] <- fluidRow (
+                    column (colW, htmlOutput (uiLWs[1])),
+                    column (colW, htmlOutput (uiLWs[2])),
+                    column (colW, htmlOutput (uiLWs[3])),
+                    column (colW, htmlOutput (uiLWs[4])),
+                    column (colW, htmlOutput (uiLWs[5])),
+                    column (colW, htmlOutput (uiLWs[6]))
+                )
+            } 
         }
         tagList (rowList)
-    })
-}
-
-setUiRowPlots  <- function (output, pe, rowN) {
-    output[[pe$pr[[rowN]]$uiPWrow]] <- renderUI ({
-        nCols       <- pe$nPcols
-        pr          <- pe$pr[[rowN]]
-        pwColList   <- vector (mode='list', length = nCols)
-        for (colN in 1:nCols) {
-            plotN               <- rcPlotN (pe, rowN, colN)
-            pw                  <- pe$pw[[plotN]]
-            height              <- paste0 (pr$pwHeight, 'px')
-            width               <- 12 / nCols
-            pwColList[[colN]]   <- plotOutput (pw$uiPW, height=height, width=width)
-        }
-        do.call(tagList, pwColList)  
     })
 }
 
@@ -274,7 +300,7 @@ initPMpanel <- function (pe, plotN) {
     pe$pw[[plotN]]$uiPMapply    <- paste0 ('uiPMapply', plotN)      # apply panel app settings
     pe$pw[[plotN]]$uiPMapp      <- paste0 ('uiPMapp'  , plotN)      # for panel app elements
     pe$pw[[plotN]]$plus         <- FALSE                            # start with a collapsed panel
-
+    
 }
 
 setUiPMpanels <- function (output, pe) {
@@ -297,7 +323,6 @@ processPMWplus <- function (output, pe, plotN) {                    # plus press
 }
 
 setUiPMpanel <- function (output, pe, plotN) {
-    cat ("setUiPMpanel invoked\n")
     pw                      <- pe$pw[[plotN]]
     if (pe$pw[[plotN]]$plus) {setUiPMplus (output, pe, plotN)}  
     else                     {setUiPMmin  (output, pe, plotN)}
@@ -353,7 +378,6 @@ setObservePMW <- function (input, output, pe, plotN) {
     observe ({
         n  <- input[[uiPMplus]]
         if (!is.null(n) ) {
-            cat ("setObservePMW:", "expand button observed =", uiPMplus, 'plotN=', plotN, '\n')
             processPMWplus  (output, pe, plotN)
             setUiPMapp      (input, output, pe, plotN)
         }
@@ -362,7 +386,6 @@ setObservePMW <- function (input, output, pe, plotN) {
     observe ({
         n  <- input[[uiPMmin]]
         if (!is.null(n)) {
-            cat ("setObservePMW:", "collapse button observed =", uiPMmin, 'plotN=', plotN, '\n')
             processPMWmin (output, pe, plotN)
         }
     })
@@ -386,6 +409,19 @@ rcPlotN <- function (pe, rowN, colN) {
     (rowN-1)*nCols + colN
 }
 
+# end of generic DynamicPlotWindowsApp 
+# start of application functions
+
+showAllLegends <- function (output, pe)  {
+    for (plotN in 1:pe$nPW) showLegend (output, pe, plotN) 
+}
+
+showLegend <- function (output, pe, plotN) {
+    pw                  <- pe$pw[[plotN]]
+    lText               <- paste (pw$lText, collapse = '<br/>')
+    output[[pw$uiLW]]   <- renderUI ({ HTML(lText) })
+}
+
 showAllPlots <- function (output, pe) {
     for (i in 1:pe$nPW) { local ({
         plotN               <- i                            # create a local copy
@@ -396,12 +432,13 @@ showAllPlots <- function (output, pe) {
 
 initPMapp <- function (pe, plotN) {
     # user defined plot management initialisation function  
+    # e.g.
+    pe$pw[[1]]$lText <- c ("plot 1 example legend line 1", "plot 1 example legend line 2")
 }
 
 setUiPMapp <- function (input, output, pe, plotN) {
-    cat ("setUiPMapp", "plotN=", plotN, '\n')
     pw <- pe$pw[[plotN]]
-    # user defined plot management function 
+    # user defined plot management function. e.g.:
     output[[pw$uiPMapp]] <- renderUI ({
         p (paste ('your plot', plotN, 'management widgets'), align='center')
     })
