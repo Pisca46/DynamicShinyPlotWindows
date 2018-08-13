@@ -16,7 +16,8 @@ require (ggplot2)
 
 ui <- fluidPage (sidebarLayout (
     sidebarPanel (
-        uiOutput ('uiPlotMgmnt')
+        uiOutput ('uiPlotMgmnt'),
+        width = 3
     ),
     mainPanel (
         uiOutput ('uiPlotsAndLegends'),
@@ -31,18 +32,19 @@ ui <- fluidPage (sidebarLayout (
                 column (2, actionButton ('uiColsMin' , label='-')),
                 column (2, actionButton ('uiColsPlus', label='+'))
             ), offset = 7)
-        )
+        ),
+        width = 9
     )
 ))
 
 server = function (input, output, session) {
-    pe <- intitPlotEnvir()
+    pe <- initPlotEnvir()
     initPlots    (pe)
     setUiPlots   (input, output, pe)                        # and show empty plots
     
     observe ({
         n <- input$uiRowsMin
-        if (!is.null(n) && n) processRowsMin (input, output, pe)
+        if (!is.null(n) && n) processRowsMin (input, output, pe)    # as always, neglect the initial value 0
     })
     observe ({
         n <- input$uiRowsPlus
@@ -58,7 +60,7 @@ server = function (input, output, session) {
     })
 }
 
-intitPlotEnvir <- function () {
+initPlotEnvir <- function () {
     pe          <- new.env()
     pe$nProws   <- 2
     pe$nPcols   <- 2
@@ -89,8 +91,8 @@ setUiPlots <- function (input, output, pe) {
     if (pe$nPW > pe$nPWui) for (plotN in (pe$nPWui+1):pe$nPW) {
         setUiPMpanel  (output, pe, plotN)                   # set user interface for  a (collapsed) PW window
         setObservePMW (input, output, pe, plotN)            # make it observed
+        pe$nPWui <- pe$nPW
     }
-    pe$nPWui <- pe$nPW
     showAllPlots  (output, pe)
     showAllLegends (output, pe)
 }
@@ -106,7 +108,7 @@ processRowsPlus <- function (input, output, pe) {
     initPlotRow       (pe, pe$nProws)
     for (plotN in (nPWold+1):pe$nPW ) {
         initPlotWindow (pe, plotN)                          # init new plot and legend windows
-        initPMpanel    (pe, plotN)                          # init new PM panels
+        initPMpanel    (pe, plotN)                          # init new PM panels, incl plotDescr 
         initPMapp      (pe, plotN)
     }
     setUiPlots (input, output, pe)
@@ -124,7 +126,7 @@ processColsPlus <- function (input, output, pe) {
         initPMapp      (pe, plotN)
     }
     setAllPMplotDescr  (pe)
-    for (plotN in 1:pe$nPWui) {                             # the [r,c] mapping to plotN changed
+    if (pe$nPW > pe$nPWui) for (plotN in 1:pe$nPWui) {      # plotN to [r,c] changed; from pe$nPWui+1 on in setUiPlots
         setUiPMpanel  (output, pe, plotN)      
     }
     setUiPlots (input, output, pe)
@@ -136,7 +138,6 @@ processRowsMin <- function (input, output, pe) {
     pe$pr[[pe$nProws]]  <- NULL
     pe$nProws           <- pe$nProws - 1
     pe$nPW              <- pe$nProws * pe$nPcols
-    pe$nPWui            <- min (pe$nPW, pe$nPWui) 
     for (plotN in (pe$nPW+1):nPWold ) {
         pe$pw[[plotN]]  <- NULL
     }
@@ -149,12 +150,12 @@ processColsMin <- function (input, output, pe) {
     else                     pe$nPcols <- pe$nPcols - 1   
     nPWold              <- pe$nPW
     pe$nPW              <- pe$nProws * pe$nPcols
-    pe$nPWui            <- min (pe$nPW, pe$nPWui) 
+    # pe$nPWui            <- min (pe$nPW, pe$nPWui) 
     for (plotN in (pe$nPW+1):nPWold ) {
         pe$pw[[plotN]]  <- NULL
     }
     setAllPMplotDescr  (pe)
-    for (plotN in 1:pe$nPWui) {                             # the [r,c] mapping to plotN changed
+    if (pe$nPW > pe$nPWui) for (plotN in 1:pe$nPWui) {       # plotN to [r,c] changed; from pe$nPWui+1 on in setUiPlots
         setUiPMpanel  (output, pe, plotN)      
     }
     setUiPlots (input, output, pe)
@@ -377,7 +378,8 @@ setObservePMW <- function (input, output, pe, plotN) {
     uiPMplus    <- pw$uiPMplus
     observe ({
         n  <- input[[uiPMplus]]
-        if (!is.null(n) ) {
+        if (!is.null(n) && n) {                             # as always, neglect the initial value 0
+            cat ("uiPMplus observed:", "n=", n, '\n')
             processPMWplus  (output, pe, plotN)
             setUiPMapp      (input, output, pe, plotN)
         }
@@ -385,13 +387,15 @@ setObservePMW <- function (input, output, pe, plotN) {
     uiPMmin     <- pw$uiPMmin
     observe ({
         n  <- input[[uiPMmin]]
-        if (!is.null(n)) {
+        if (!is.null(n) && n) {
+            cat ("uiPMmin  observed:", "n=", n, '\n')
             processPMWmin (output, pe, plotN)
         }
     })
     observe ({
         n  <- input[[pw$uiPMapply]]
         if (!is.null(n) && n) {
+            cat ("uiPMapply observed:", "n=", n, '\n')
             processPMapply (input, output, pe, plotN)
         }
     })
